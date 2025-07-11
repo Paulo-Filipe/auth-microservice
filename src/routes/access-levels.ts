@@ -1,10 +1,9 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { db } from '../db';
-import { accessLevels } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { FastifyInstance } from 'fastify';
 import { authenticateToken, requirePermission } from '../middleware/auth';
+import { AccessLevelController } from '../controllers/access-level.controller';
 import { createAccessLevelJsonSchema, updateAccessLevelJsonSchema } from '../schemas/access-levels';
 
+/* eslint-disable @typescript-eslint/unbound-method */
 export default async function accessLevelsRoutes(fastify: FastifyInstance) {
   fastify.post('/', {
     preHandler: [authenticateToken, requirePermission('access-levels.create')],
@@ -23,133 +22,24 @@ export default async function accessLevelsRoutes(fastify: FastifyInstance) {
         },
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { name, description, permissions } = request.body as { name: string; description?: string; permissions: string[] };
-
-    try {
-      const existingLevel = await db
-        .select()
-        .from(accessLevels)
-        .where(eq(accessLevels.name, name))
-        .limit(1);
-
-      if (existingLevel.length > 0) {
-        return reply.code(400).send({ error: 'Nível de acesso já existe' });
-      }
-
-      const [newAccessLevel] = await db
-        .insert(accessLevels)
-        .values({
-          name,
-          description: description || null,
-          permissions,
-        })
-        .returning();
-
-      if (!newAccessLevel) {
-        return reply.code(500).send({ error: 'Erro ao criar nível de acesso' });
-      }
-
-      return reply.code(201).send({
-        id: newAccessLevel.id,
-        name: newAccessLevel.name,
-        description: newAccessLevel.description,
-        permissions: newAccessLevel.permissions,
-        createdAt: newAccessLevel.createdAt.toISOString(),
-      });
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.code(500).send({ error: 'Erro interno do servidor' });
-    }
-  });
+  }, AccessLevelController.createAccessLevel);
 
   fastify.get('/', {
     preHandler: [authenticateToken, requirePermission('access-levels.read')],
-  }, async (_request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const allAccessLevels = await db
-        .select()
-        .from(accessLevels);
-
-      return reply.send(allAccessLevels);
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.code(500).send({ error: 'Erro interno do servidor' });
-    }
-  });
+  }, AccessLevelController.getAllAccessLevels);
 
   fastify.get('/:id', {
     preHandler: [authenticateToken, requirePermission('access-levels.read')],
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
-
-    try {
-      const [accessLevel] = await db
-        .select()
-        .from(accessLevels)
-        .where(eq(accessLevels.id, id))
-        .limit(1);
-
-      if (!accessLevel) {
-        return reply.code(404).send({ error: 'Nível de acesso não encontrado' });
-      }
-
-      return reply.send(accessLevel);
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.code(500).send({ error: 'Erro interno do servidor' });
-    }
-  });
+  }, AccessLevelController.getAccessLevelById);
 
   fastify.put('/:id', {
     preHandler: [authenticateToken, requirePermission('access-levels.update')],
     schema: {
       body: updateAccessLevelJsonSchema,
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
-    const updateData = request.body as { name?: string; description?: string; permissions?: string[] };
-
-    try {
-      const [updatedAccessLevel] = await db
-        .update(accessLevels)
-        .set({
-          ...updateData,
-          updatedAt: new Date(),
-        })
-        .where(eq(accessLevels.id, id))
-        .returning();
-
-      if (!updatedAccessLevel) {
-        return reply.code(404).send({ error: 'Nível de acesso não encontrado' });
-      }
-
-      return reply.send(updatedAccessLevel);
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.code(500).send({ error: 'Erro interno do servidor' });
-    }
-  });
+  }, AccessLevelController.updateAccessLevel);
 
   fastify.delete('/:id', {
     preHandler: [authenticateToken, requirePermission('access-levels.delete')],
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
-
-    try {
-      const [deletedAccessLevel] = await db
-        .delete(accessLevels)
-        .where(eq(accessLevels.id, id))
-        .returning();
-
-      if (!deletedAccessLevel) {
-        return reply.code(404).send({ error: 'Nível de acesso não encontrado' });
-      }
-
-      return reply.send({ message: 'Nível de acesso deletado com sucesso' });
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.code(500).send({ error: 'Erro interno do servidor' });
-    }
-  });
+  }, AccessLevelController.deleteAccessLevel);
 } 
